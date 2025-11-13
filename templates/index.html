@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Edge Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px 32px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    .controls {
+      padding: 24px 32px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-group.checkbox-group {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      padding-top: 24px;
+    }
+
+    .control-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #495057;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .control-group.checkbox-group label {
+      text-transform: none;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    select, input[type="text"], input[type="number"] {
+      padding: 10px 14px;
+      font-size: 14px;
+      border: 2px solid #dee2e6;
+      border-radius: 8px;
+      background: white;
+      color: #333;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #667eea;
+    }
+
+    button {
+      padding: 10px 18px;
+      font-size: 14px;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      background: #667eea;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #5568d3;
+      border-color: #5568d3;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    select:hover, input:hover {
+      border-color: #adb5bd;
+    }
+
+    .chart-container {
+      position: relative;
+      padding: 32px;
+      padding-bottom: 80px;
+      height: 600px;
+      background: white;
+    }
+
+    .hide-all-button {
+      position: absolute;
+      bottom: 20px;
+      right: 32px;
+      z-index: 10;
+    }
+
+    canvas {
+      max-height: 100%;
+    }
+
+    .status {
+      padding: 16px 32px;
+      background: #f8f9fa;
+      border-top: 1px solid #e9ecef;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #6c757d;
+      gap: 20px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #28a745;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+      color: #6c757d;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .control-group {
+        width: 100%;
+      }
+
+      .chart-container {
+        height: 400px;
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Live Edge Dashboard</h1>
+      <p>Real-time bid/ask edge monitoring by ticker</p>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="sheetSelect">Sheet</label>
+        <select id="sheetSelect" onchange="loadSheet()">
+          {% for s in sheets %}
+            <option value="{{s}}" {% if s == current %}selected{% endif %}>{{s}}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="timeRangeSelect">Time Range</label>
+        <select id="timeRangeSelect" onchange="loadSheet()">
+          <option value="5">Last 5 minutes</option>
+          <option value="10">Last 10 minutes</option>
+          <option value="20" selected>Last 20 minutes</option>
+          <option value="30">Last 30 minutes</option>
+          <option value="60">Last 1 hour</option>
+          <option value="120">Last 2 hours</option>
+          <option value="240">Last 4 hours</option>
+          <option value="0">All data</option>
+        </select>
+      </div>
+
+      <div class="control-group checkbox-group">
+        <input type="checkbox" id="filterOutliers" onchange="loadSheet()">
+        <label for="filterOutliers">Filter outliers (5 std dev)</label>
+      </div>
+
+      <div class="control-group checkbox-group">
+        <input type="checkbox" id="showSeparate" onchange="loadSheet()">
+        <label for="showSeparate">Show Bid/Ask separately</label>
+      </div>
+    </div>
+
+    <div class="loading" id="loading">Loading chart data...</div>
+    <div class="chart-container">
+      <canvas id="edgeChart"></canvas>
+      <div class="hide-all-button">
+        <button onclick="hideAllTickers()" type="button" style="padding: 6px 14px; font-size: 12px;">Hide All Tickers</button>
+      </div>
+    </div>
+
+    <div class="status">
+      <div class="status-item">
+        <span class="status-dot"></span>
+        <span>Live</span>
+      </div>
+      <div class="status-item" id="dataInfo">
+        <span>Ready</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let chart;
+    let currentSheet = "{{current}}";
+    let currentMinutes = 20;
+    let isUpdating = false;
+
+    // Fetch JSON data for a given sheet
+    async function fetchData(sheet, minutes, showSeparate, filterOutliers) {
+      const showSeparateParam = showSeparate ? 'true' : 'false';
+      const filterOutliersParam = filterOutliers ? 'true' : 'false';
+      const res = await fetch(`/data?sheet=${encodeURIComponent(sheet)}&minutes=${minutes}&show_separate=${showSeparateParam}&filter_outliers=${filterOutliersParam}`);
+      if (!res.ok) {
+        console.error("Failed to fetch data:", res.statusText);
+        return { times: [], values: {}, bid_values: {}, ask_values: {} };
+      }
+      return await res.json();
+    }
+
+    // Draw or update the chart
+    async function drawChart() {
+      if (isUpdating) return; // Prevent concurrent updates
+      isUpdating = true;
+
+      try {
+        const minutesValue = document.getElementById('timeRangeSelect').value;
+        const minutes = minutesValue === '0' ? 0 : (parseInt(minutesValue) || 20);
+        const showSeparate = document.getElementById('showSeparate').checked;
+        const filterOutliers = document.getElementById('filterOutliers').checked;
+        currentMinutes = minutes;
+        
+        const data = await fetchData(currentSheet, minutes, showSeparate, filterOutliers);
+
+        if (!data || !data.times || !data.times.length) {
+          console.warn("No data to plot - times array is empty");
+          if (chart) {
+            chart.destroy();
+            chart = null;
+          }
+          updateStatus("No data available", 0);
+          return;
+        }
+
+        // Check if we have data for the selected mode
+        const hasAverageData = data.values && Object.keys(data.values).length > 0;
+        const hasSeparateData = showSeparate && data.bid_values && Object.keys(data.bid_values).length > 0;
+        
+        if (!hasAverageData && !hasSeparateData) {
+          console.warn("No ticker data found for selected mode");
+          if (chart) {
+            chart.destroy();
+            chart = null;
+          }
+          updateStatus("No ticker data found", 0);
+          return;
+        }
+
+        const ctx = document.getElementById('edgeChart').getContext('2d');
+        
+        // Better color palette
+        const colors = [
+          { border: 'rgb(102, 126, 234)', bg: 'rgba(102, 126, 234, 0.1)' },
+          { border: 'rgb(118, 75, 162)', bg: 'rgba(118, 75, 162, 0.1)' },
+          { border: 'rgb(239, 71, 111)', bg: 'rgba(239, 71, 111, 0.1)' },
+          { border: 'rgb(255, 159, 64)', bg: 'rgba(255, 159, 64, 0.1)' },
+          { border: 'rgb(46, 213, 115)', bg: 'rgba(46, 213, 115, 0.1)' },
+          { border: 'rgb(0, 206, 201)', bg: 'rgba(0, 206, 201, 0.1)' },
+          { border: 'rgb(253, 121, 168)', bg: 'rgba(253, 121, 168, 0.1)' },
+          { border: 'rgb(99, 205, 218)', bg: 'rgba(99, 205, 218, 0.1)' }
+        ];
+
+        let datasets = [];
+        let tickerCount = 0;
+
+        if (showSeparate && hasSeparateData) {
+          // Show bid and ask separately
+          // Get all unique tickers and convert to sorted array for consistent indexing
+          const allTickers = Array.from(new Set([
+            ...Object.keys(data.bid_values || {}),
+            ...Object.keys(data.ask_values || {})
+          ])).sort();
+          
+          allTickers.forEach((ticker, i) => {
+            const color = colors[i % colors.length];
+            if (!color) {
+              console.error(`No color available for index ${i}`);
+              return;
+            }
+            
+            const bidValues = data.bid_values[ticker] || [];
+            const askValues = data.ask_values[ticker] || [];
+            
+            // Bid edge - solid line
+            datasets.push({
+              label: `${ticker} (Bid)`,
+              data: bidValues,
+              borderWidth: 2.5,
+              borderColor: color.border,
+              backgroundColor: 'transparent',
+              fill: false,
+              tension: 0.3,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              borderDash: []
+            });
+            
+            // Ask edge - dashed line
+            datasets.push({
+              label: `${ticker} (Ask)`,
+              data: askValues,
+              borderWidth: 2.5,
+              borderColor: color.border,
+              backgroundColor: 'transparent',
+              fill: false,
+              tension: 0.3,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              borderDash: [5, 5]
+            });
+          });
+          
+          tickerCount = allTickers.length;
+        } else {
+          // Show average (original behavior)
+          if (!hasAverageData) {
+            console.warn("No average data found");
+            if (chart) {
+              chart.destroy();
+              chart = null;
+            }
+            updateStatus("No average data found", 0);
+            return;
+          }
+
+          datasets = Object.entries(data.values).map(([ticker, values], i) => {
+            const color = colors[i % colors.length];
+            return {
+              label: ticker,
+              data: values,
+              borderWidth: 2.5,
+              borderColor: color.border,
+              backgroundColor: color.bg,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              pointHoverBorderWidth: 2,
+              pointBackgroundColor: color.border,
+              pointBorderColor: '#fff'
+            };
+          });
+          
+          tickerCount = Object.keys(data.values).length;
+        }
+
+        // Configure Y-axis
+        const yAxisConfig = {
+          title: {
+            display: true,
+            text: showSeparate ? "Bid/Ask Edge" : "Average Edge",
+            font: { size: 13, weight: '600' },
+            color: '#495057'
+          },
+          beginAtZero: false,
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)',
+            drawBorder: false
+          },
+          ticks: {
+            font: { size: 11 },
+            color: '#6c757d',
+            callback: function(value) {
+              return value.toFixed(2);
+            }
+          }
+        };
+
+        // Update existing chart instead of destroying/recreating for better performance
+        if (chart) {
+          // Preserve dataset visibility state (for legend click selections)
+          const hiddenStates = [];
+          for (let i = 0; i < chart.data.datasets.length; i++) {
+            const meta = chart.getDatasetMeta(i);
+            if (meta) {
+              hiddenStates.push(meta.hidden);
+            } else {
+              hiddenStates.push(false);
+            }
+          }
+          
+          // Map old dataset labels to new datasets to preserve visibility
+          const labelToHidden = {};
+          chart.data.datasets.forEach((oldDataset, idx) => {
+            if (hiddenStates[idx] !== undefined) {
+              labelToHidden[oldDataset.label] = hiddenStates[idx];
+            }
+          });
+          
+          chart.data.labels = data.times;
+          chart.data.datasets = datasets;
+          chart.options.scales.y = yAxisConfig;
+          
+          // Restore visibility state after update
+          chart.update('none'); // 'none' mode = no animation for instant update
+          
+          // Restore hidden states based on label matching
+          chart.data.datasets.forEach((dataset, idx) => {
+            const meta = chart.getDatasetMeta(idx);
+            if (meta && labelToHidden.hasOwnProperty(dataset.label)) {
+              meta.hidden = labelToHidden[dataset.label];
+            }
+          });
+          
+          // Update the chart again to reflect the restored visibility
+          chart.update('none');
+        } else {
+          chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: data.times, datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false, // Disable animations for performance
+              interaction: {
+                intersect: false,
+                mode: 'index'
+              },
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: {
+                    padding: 15,
+                    usePointStyle: true,
+                    font: {
+                      size: 12,
+                      weight: '500'
+                    }
+                  }
+                },
+                tooltip: {
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  padding: 12,
+                  titleFont: { size: 13, weight: '600' },
+                  bodyFont: { size: 12 },
+                  borderColor: 'rgba(255, 255, 255, 0.1)',
+                  borderWidth: 1,
+                  displayColors: true,
+                  callbacks: {
+                    label: function(context) {
+                      const value = context.parsed.y;
+                      if (value === null || value === undefined) return context.dataset.label + ': N/A';
+                      return context.dataset.label + ': ' + value.toFixed(3);
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: yAxisConfig,
+                x: {
+                  title: {
+                    display: true,
+                    text: "Time",
+                    font: { size: 13, weight: '600' },
+                    color: '#495057'
+                  },
+                  grid: {
+                    display: false
+                  },
+                  ticks: {
+                    autoSkip: true,
+                    maxTicksLimit: 15,
+                    maxRotation: 45,
+                    minRotation: 0,
+                    font: { size: 11 },
+                    color: '#6c757d'
+                  }
+                }
+              }
+            }
+          });
+        }
+
+        const pointCount = data.times.length;
+        const lineCount = datasets.length;
+        updateStatus(`${tickerCount} tickers, ${lineCount} lines, ${pointCount} points`, tickerCount);
+        console.log("Chart updated successfully");
+      } catch (error) {
+        console.error("Error drawing chart:", error);
+        if (chart) {
+          chart.destroy();
+          chart = null;
+        }
+        updateStatus("Error loading data", 0);
+      } finally {
+        isUpdating = false;
+      }
+    }
+
+    function updateStatus(text, tickerCount) {
+      const infoEl = document.getElementById('dataInfo');
+      infoEl.textContent = text;
+    }
+
+    // Hide all tickers at once
+    function hideAllTickers() {
+      if (!chart) {
+        console.warn("No chart available to hide tickers");
+        return;
+      }
+
+      // Hide all datasets
+      chart.data.datasets.forEach((dataset, index) => {
+        const meta = chart.getDatasetMeta(index);
+        if (meta) {
+          meta.hidden = true;
+        }
+      });
+
+      // Update the chart to reflect the changes
+      chart.update('none');
+      console.log("All tickers hidden");
+    }
+
+    // Auto-refresh loop (every 15s for better responsiveness)
+    async function refreshLoop() {
+      while (true) {
+        await new Promise(r => setTimeout(r, 15000)); // Refresh every 15 seconds
+        if (!isUpdating) {
+          await drawChart();
+        }
+      }
+    }
+
+    // Handle sheet change from dropdown
+    function loadSheet() {
+      currentSheet = document.getElementById("sheetSelect").value;
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+      drawChart();
+    }
+
+    // Initial draw and start refresh loop
+    drawChart();
+    refreshLoop();
+  </script>
+</body>
+</html>
