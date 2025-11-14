@@ -15,12 +15,14 @@ EDGE_FILE = Path("/mnt/c/Users/pmanning/Desktop/LogEdges.xlsx")
 
 
 def load_data(sheet=None):
-    xls = pd.ExcelFile(EDGE_FILE)
-    sheets = xls.sheet_names
-    latest = sorted(sheets)[-1]
-    sheet = sheet or latest
-
-    df = pd.read_excel(EDGE_FILE, sheet_name=sheet, header=None, skiprows=1)
+    # Open and close ExcelFile properly to ensure fresh reads
+    with pd.ExcelFile(EDGE_FILE, engine='openpyxl') as xls:
+        sheets = xls.sheet_names
+        latest = sorted(sheets)[-1]
+        sheet = sheet or latest
+    
+    # Read the data fresh each time (don't use the cached ExcelFile)
+    df = pd.read_excel(EDGE_FILE, sheet_name=sheet, header=None, skiprows=1, engine='openpyxl')
 
     if df.empty:
         return pd.DataFrame(columns=["Time","Ticker","Bid Edge","Ask Edge"]), sheet
@@ -45,8 +47,10 @@ def index():
     """Home route with dropdown of all sheets."""
     if not EDGE_FILE.exists():
         return "EdgeLog.xlsx not found", 404
-    xls = pd.ExcelFile(EDGE_FILE)
-    sheets = sorted(xls.sheet_names)
+    
+    # Open and close ExcelFile properly to ensure fresh reads
+    with pd.ExcelFile(EDGE_FILE, engine='openpyxl') as xls:
+        sheets = sorted(xls.sheet_names)
     
     # Find EdgeLog_YYYY_MM_DD sheets and select the most recent one
     edge_log_sheets = []
